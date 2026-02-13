@@ -159,6 +159,7 @@ interface AppContextType extends AppState {
   deleteTimerPreset: (id: string) => void;
   // Data
   exportData: (includePhotos: boolean) => Promise<void>;
+  exportDataManually: (includePhotos: boolean) => Promise<string>;
   importData: (file: File) => Promise<void>;
 }
 
@@ -385,11 +386,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ironlog-export-${format(new Date(), 'yyyy-MM-dd')}.gymdata`;
+      a.download = `IronLog_Backup_${format(new Date(), 'yyyyMMdd')}.gymdata`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+  };
+
+  const exportDataManually = async (includePhotos: boolean): Promise<string> => {
+      const dataToExport = {
+          appVersion: "1.0.0",
+          exportDate: new Date().toISOString(),
+          workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
+          exercises,
+          globalNotes
+      };
+      
+      const fileName = `IronLog_Backup_${format(new Date(), 'yyyyMMdd')}.gymdata`;
+      const jsonStr = JSON.stringify(dataToExport, null, 2);
+
+      if ('showSaveFilePicker' in window) {
+          try {
+              const handle = await (window as any).showSaveFilePicker({
+                  suggestedName: fileName,
+                  types: [{
+                      description: 'Gym Data File',
+                      accept: { 'application/json': ['.gymdata'] },
+                  }],
+              });
+              const writable = await handle.createWritable();
+              await writable.write(jsonStr);
+              await writable.close();
+              return handle.name;
+          } catch (err: any) {
+              if (err.name === 'AbortError') {
+                   throw new Error("Export cancelled");
+              }
+              throw err;
+          }
+      } else {
+          // Fallback for browsers without File System Access API
+          await exportData(includePhotos);
+          return fileName;
+      }
   };
 
   const importData = async (file: File) => {
@@ -450,6 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveTimerPreset,
       deleteTimerPreset,
       exportData,
+      exportDataManually,
       importData
     }}>
       {children}

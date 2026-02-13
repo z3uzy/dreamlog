@@ -1,7 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { useApp } from "@/lib/store";
 import { Switch } from "@/components/ui/switch";
-import { Moon, Sun, Scale, Shield, Info, Download, Upload, AlertCircle } from "lucide-react";
+import { Moon, Sun, Scale, Shield, Info, Download, Upload, AlertCircle, FolderInput, FileUp, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -18,22 +18,39 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Settings() {
-  const { unitSystem, toggleUnitSystem, theme, toggleTheme, exportData, importData } = useApp();
+  const { unitSystem, toggleUnitSystem, theme, toggleTheme, exportData, exportDataManually, importData } = useApp();
   const [includePhotos, setIncludePhotos] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleExport = async () => {
+  const handleQuickExport = async () => {
       try {
           await exportData(includePhotos);
           toast({
               title: "Export Successful",
-              description: "Your data has been exported to a .gymdata file.",
+              description: "Saved to default Downloads folder.",
           });
       } catch (error) {
           toast({
               title: "Export Failed",
               description: "Could not export data.",
+              variant: "destructive"
+          });
+      }
+  };
+
+  const handleManualExport = async () => {
+      try {
+          const fileName = await exportDataManually(includePhotos);
+          toast({
+              title: "Export Successful",
+              description: `Saved as ${fileName}`,
+          });
+      } catch (error: any) {
+          if (error.message === "Export cancelled") return;
+          toast({
+              title: "Export Failed",
+              description: error.message || "Could not export data.",
               variant: "destructive"
           });
       }
@@ -48,8 +65,6 @@ export default function Settings() {
       if (!file) return;
 
       // We need to confirm before overwriting
-      // Trigger handled by dialog logic, but standard file input is tricky with custom dialogs.
-      // Let's use a state to hold the file pending confirmation
       setPendingFile(file);
       setIsImportDialogOpen(true);
       
@@ -71,7 +86,6 @@ export default function Settings() {
           setIsImportDialogOpen(false);
           setPendingFile(null);
           // Force reload to ensure all state is fresh? 
-          // React state updates should handle it, but a hard reload is safer for full app state replacement
           setTimeout(() => window.location.reload(), 500); 
       } catch (error) {
            toast({
@@ -92,17 +106,43 @@ export default function Settings() {
                 <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider pl-1">Data Management</h2>
                 <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
                     <div className="p-4 space-y-4">
+                        {/* Options */}
                         <div className="flex justify-between items-center">
                              <div className="flex items-center gap-3">
                                 <span className="font-medium text-sm">Include Photos in Export</span>
                             </div>
                             <Switch checked={includePhotos} onCheckedChange={setIncludePhotos} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button variant="outline" className="h-12 border-primary/20 hover:bg-primary/5 hover:text-primary" onClick={handleExport}>
-                                <Download size={18} className="mr-2" /> Export Data
-                            </Button>
-                            <Button variant="outline" className="h-12 border-primary/20 hover:bg-primary/5 hover:text-primary" onClick={handleImportClick}>
+                        
+                        {/* Storage Location Section */}
+                        <div className="space-y-2 pt-2">
+                             <h3 className="text-xs font-bold text-muted-foreground uppercase">Storage Location & Export</h3>
+                             <div className="grid gap-3">
+                                <Button variant="outline" className="h-auto py-3 flex justify-start border-primary/20 hover:bg-primary/5 hover:text-primary relative group" onClick={handleQuickExport}>
+                                    <div className="bg-secondary p-2 rounded-lg mr-3 group-hover:bg-background transition-colors">
+                                        <Download size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-semibold text-sm">Quick Export</div>
+                                        <div className="text-[10px] text-muted-foreground">Save to Default Folder</div>
+                                    </div>
+                                </Button>
+
+                                <Button variant="outline" className="h-auto py-3 flex justify-start border-primary/20 hover:bg-primary/5 hover:text-primary relative group" onClick={handleManualExport}>
+                                     <div className="bg-secondary p-2 rounded-lg mr-3 group-hover:bg-background transition-colors">
+                                        <FolderOpen size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-semibold text-sm">Choose Location & Export</div>
+                                        <div className="text-[10px] text-muted-foreground">Select Folder Manually</div>
+                                    </div>
+                                </Button>
+                             </div>
+                        </div>
+
+                        <div className="pt-2">
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">Restore Data</h3>
+                            <Button variant="outline" className="w-full h-12 border-primary/20 hover:bg-primary/5 hover:text-primary" onClick={handleImportClick}>
                                 <Upload size={18} className="mr-2" /> Import Data
                             </Button>
                             <input 
