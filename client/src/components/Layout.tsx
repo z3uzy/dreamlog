@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Dumbbell, BarChart2, Notebook, Settings, Plus } from "lucide-react";
+import { Home, Dumbbell, BarChart2, Notebook, Settings, Plus, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
 
@@ -22,14 +22,15 @@ function BottomNav({ activeWorkoutId }: { activeWorkoutId: string | null }) {
   const navItems = [
     { icon: Home, label: "Home", href: "/" },
     { icon: Dumbbell, label: "Workout", href: activeWorkoutId ? `/workout/${activeWorkoutId}` : "/workout" },
+    { icon: Timer, label: "Clock", href: "/clock" },
     { icon: BarChart2, label: "Progress", href: "/progress" },
     { icon: Notebook, label: "Notes", href: "/notes" },
     { icon: Settings, label: "Settings", href: "/settings" },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-t border-border pb-[env(safe-area-inset-bottom)]">
-      <div className="flex justify-around items-center h-16 max-w-md mx-auto px-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-lg border-t border-border pb-[env(safe-area-inset-bottom)]">
+      <div className="flex justify-around items-center h-16 max-w-md mx-auto px-1">
         {navItems.map((item) => {
           const isActive = location === item.href || (item.href.startsWith("/workout") && location.startsWith("/workout"));
           const Icon = item.icon;
@@ -44,7 +45,7 @@ function BottomNav({ activeWorkoutId }: { activeWorkoutId: string | null }) {
                   "relative p-1.5 rounded-xl transition-all duration-300",
                   isActive && "bg-primary/10"
                 )}>
-                  <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                  <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                   {item.label === "Workout" && activeWorkoutId && (
                     <span className="absolute -top-1 -right-1 flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>

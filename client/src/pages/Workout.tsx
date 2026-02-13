@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApp, WorkoutExercise, WorkoutSet } from "@/lib/store";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus, Trash2, Check, Clock, Save, Camera, MoreVertical, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, Clock, Save, Camera, MoreVertical, X, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Drawer,
@@ -28,6 +28,9 @@ export default function WorkoutPage() {
   const workout = workouts.find(w => w.id === workoutId);
 
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Timer logic
   useEffect(() => {
@@ -41,6 +44,18 @@ export default function WorkoutPage() {
     
     return () => clearInterval(interval);
   }, [workout]);
+
+  useEffect(() => {
+      if (workout) {
+          setTitleInput(workout.name);
+      }
+  }, [workout?.name]);
+
+  useEffect(() => {
+      if (isEditingTitle && titleInputRef.current) {
+          titleInputRef.current.focus();
+      }
+  }, [isEditingTitle]);
 
   // Format seconds to MM:SS
   const formatTime = (seconds: number) => {
@@ -69,6 +84,21 @@ export default function WorkoutPage() {
   const handleFinish = () => {
     finishWorkout();
     setLocation("/");
+  };
+
+  const saveTitle = () => {
+      if (titleInput.trim()) {
+          updateWorkout({ ...workout, name: titleInput.trim() });
+      } else {
+          setTitleInput(workout.name);
+      }
+      setIsEditingTitle(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          saveTitle();
+      }
   };
 
   const handleAddExercise = (exerciseId: string) => {
@@ -149,8 +179,22 @@ export default function WorkoutPage() {
         <Button variant="ghost" size="icon" onClick={() => setLocation("/")} className="h-8 w-8 -ml-2">
             <ArrowLeft size={20} />
         </Button>
-        <div className="flex flex-col items-center">
-             <span className="font-bold text-sm">{workout.name}</span>
+        <div className="flex flex-col items-center flex-1 mx-4">
+             {isEditingTitle ? (
+                 <Input 
+                    ref={titleInputRef}
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={handleKeyDown}
+                    className="h-7 text-center font-bold text-sm bg-background border-primary"
+                 />
+             ) : (
+                 <div className="flex items-center gap-2 group cursor-pointer" onClick={() => !isReadonly && setIsEditingTitle(true)}>
+                     <span className="font-bold text-sm truncate max-w-[150px]">{workout.name}</span>
+                     {!isReadonly && <Pencil size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />}
+                 </div>
+             )}
              <span className="text-xs font-mono text-primary font-medium">{isReadonly ? "Finished" : formatTime(elapsedTime)}</span>
         </div>
         {!isReadonly ? (

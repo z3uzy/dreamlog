@@ -7,6 +7,7 @@ import WorkoutPage from "@/pages/Workout";
 import Progress from "@/pages/Progress";
 import Notes from "@/pages/Notes";
 import Settings from "@/pages/Settings";
+import Clock from "@/pages/Clock";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/workout" component={WorkoutPage} />
       <Route path="/workout/:id" component={WorkoutPage} />
+      <Route path="/clock" component={Clock} />
       <Route path="/progress" component={Progress} />
       <Route path="/notes" component={Notes} />
       <Route path="/settings" component={Settings} />

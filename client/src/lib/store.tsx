@@ -36,6 +36,20 @@ export interface Workout {
   endTime?: string;
 }
 
+export interface Note {
+  id: string;
+  text: string;
+  date: string;
+}
+
+export interface TimerState {
+    type: 'stopwatch' | 'rest';
+    startTime: number | null; // Timestamp when started
+    duration: number; // For rest timer (ms)
+    pausedAt: number | null; // Timestamp when paused
+    isRunning: boolean;
+}
+
 // Initial Mock Data
 const DEFAULT_EXERCISES: Exercise[] = [
   { id: "e1", name: "Bench Press", muscleGroup: "Chest" },
@@ -109,9 +123,11 @@ const MOCK_WORKOUTS: Workout[] = [
 interface AppState {
   workouts: Workout[];
   exercises: Exercise[];
+  globalNotes: Note[];
   unitSystem: UnitSystem;
   theme: "dark" | "light";
   activeWorkoutId: string | null;
+  timer: TimerState;
 }
 
 interface AppContextType extends AppState {
@@ -123,6 +139,15 @@ interface AppContextType extends AppState {
   toggleUnitSystem: () => void;
   toggleTheme: () => void;
   getExerciseName: (id: string) => string;
+  // Notes
+  addNote: (text: string) => void;
+  updateNote: (id: string, text: string) => void;
+  deleteNote: (id: string) => void;
+  // Timer
+  setTimerType: (type: 'stopwatch' | 'rest') => void;
+  startTimer: (duration?: number) => void;
+  pauseTimer: () => void;
+  resetTimer: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -138,6 +163,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : DEFAULT_EXERCISES;
   });
 
+  const [globalNotes, setGlobalNotes] = useState<Note[]>(() => {
+      const saved = localStorage.getItem("ironlog-notes");
+      return saved ? JSON.parse(saved) : [{ id: "1", text: "Focus on form for deadlifts next session. Keep back straight.", date: new Date().toISOString() }];
+  });
+
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => {
     return (localStorage.getItem("ironlog-units") as UnitSystem) || "lb";
   });
@@ -146,10 +176,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined" && document.documentElement.classList.contains("light")) {
         return "light";
     }
-    return "dark"; // Default to dark per requirements
+    return "dark"; 
   });
 
   const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
+
+  const [timer, setTimer] = useState<TimerState>(() => {
+      const saved = localStorage.getItem("ironlog-timer");
+      return saved ? JSON.parse(saved) : { type: 'rest', startTime: null, duration: 60000, pausedAt: null, isRunning: false };
+  });
 
   useEffect(() => {
     localStorage.setItem("ironlog-workouts", JSON.stringify(workouts));
@@ -160,8 +195,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [exercises]);
 
   useEffect(() => {
+    localStorage.setItem("ironlog-notes", JSON.stringify(globalNotes));
+  }, [globalNotes]);
+
+  useEffect(() => {
     localStorage.setItem("ironlog-units", unitSystem);
   }, [unitSystem]);
+
+  useEffect(() => {
+      localStorage.setItem("ironlog-timer", JSON.stringify(timer));
+  }, [timer]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -237,13 +280,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return exercises.find(e => e.id === id)?.name || "Unknown Exercise";
   };
 
+  // Notes Actions
+  const addNote = (text: string) => {
+      setGlobalNotes(prev => [{ id: crypto.randomUUID(), text, date: new Date().toISOString() }, ...prev]);
+  };
+  
+  const updateNote = (id: string, text: string) => {
+      setGlobalNotes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
+  };
+
+  const deleteNote = (id: string) => {
+      setGlobalNotes(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Timer Actions
+  const setTimerType = (type: 'stopwatch' | 'rest') => {
+      setTimer(prev => ({ ...prev, type, isRunning: false, startTime: null, pausedAt: null }));
+  };
+
+  const startTimer = (duration?: number) => {
+      setTimer(prev => {
+          const now = Date.now();
+          let startTime = now;
+          
+          if (prev.pausedAt && prev.startTime) {
+              // Resuming: Adjust start time so elapsed time remains correct
+              // elapsed = pausedAt - startTime
+              // newStartTime = now - elapsed
+              const elapsed = prev.pausedAt - prev.startTime;
+              startTime = now - elapsed;
+          }
+
+          return {
+              ...prev,
+              isRunning: true,
+              startTime: startTime,
+              pausedAt: null,
+              duration: duration ?? prev.duration
+          };
+      });
+  };
+
+  const pauseTimer = () => {
+      setTimer(prev => ({
+          ...prev,
+          isRunning: false,
+          pausedAt: Date.now()
+      }));
+  };
+
+  const resetTimer = () => {
+      setTimer(prev => ({
+          ...prev,
+          isRunning: false,
+          startTime: null,
+          pausedAt: null
+      }));
+  };
+
   return (
     <AppContext.Provider value={{
       workouts,
       exercises,
+      globalNotes,
       unitSystem,
       theme,
       activeWorkoutId,
+      timer,
       startWorkout,
       finishWorkout,
       updateWorkout,
@@ -251,7 +354,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addExercise,
       toggleUnitSystem,
       toggleTheme,
-      getExerciseName
+      getExerciseName,
+      addNote,
+      updateNote,
+      deleteNote,
+      setTimerType,
+      startTimer,
+      pauseTimer,
+      resetTimer
     }}>
       {children}
     </AppContext.Provider>

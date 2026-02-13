@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useState, useMemo } from "react";
-import { format, isAfter, subDays, subMonths } from "date-fns";
+import { format, isAfter, subDays, subMonths, isSameDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -24,9 +24,16 @@ export default function Progress() {
   const chartData = useMemo(() => {
     if (!selectedExerciseId) return [];
 
-    // Filter completed workouts containing the exercise
+    // Filter workouts containing the exercise
+    // We include active workouts too if they have data? User usually expects completed. 
+    // "No data for this period" was the bug.
+    // Let's look at all workouts that have the exercise and at least one completed set.
     const relevantWorkouts = workouts
-      .filter(w => w.endTime && w.exercises.some(e => e.exerciseId === selectedExerciseId))
+      .filter(w => {
+          const hasExercise = w.exercises.some(e => e.exerciseId === selectedExerciseId);
+          // Only show if it has started (date exists)
+          return hasExercise && w.date;
+      })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Filter by time range
@@ -34,20 +41,29 @@ export default function Progress() {
     const filteredWorkouts = relevantWorkouts.filter(w => {
         const d = new Date(w.date);
         if (timeRange === "week") return isAfter(d, subDays(now, 7));
-        if (timeRange === "month") return isAfter(d, subMonths(now, 1));
+        if (timeRange === "month") return isAfter(d, subMonths(now, 30));
         return true;
     });
 
-    return filteredWorkouts.map(w => {
+    const dataPoints = filteredWorkouts.map(w => {
       const ex = w.exercises.find(e => e.exerciseId === selectedExerciseId);
       if (!ex) return null;
 
+      // Filter for valid sets (weight > 0 for max weight, or just existence)
+      // If no sets are logged, don't show 0? Or show 0?
+      // "Max weight per workout" implies logged sets.
+      const validSets = ex.sets.filter(s => s.completed || (s.weight > 0 && s.reps > 0)); // Include sets that have data even if not marked 'completed' strictly? Better to stick to completed or just non-zero.
+      
+      if (validSets.length === 0) return null;
+
       let value = 0;
       if (metric === "maxWeight") {
-        value = Math.max(...ex.sets.map(s => s.weight));
+        value = Math.max(...validSets.map(s => s.weight));
       } else {
-        value = ex.sets.reduce((acc, s) => acc + (s.weight * s.reps), 0);
+        value = validSets.reduce((acc, s) => acc + (s.weight * s.reps), 0);
       }
+
+      if (value === 0) return null;
 
       return {
         date: format(new Date(w.date), "MMM d"),
@@ -55,6 +71,8 @@ export default function Progress() {
         fullDate: w.date
       };
     }).filter((item): item is { date: string, value: number, fullDate: string } => item !== null);
+
+    return dataPoints;
 
   }, [workouts, selectedExerciseId, metric, timeRange]);
 
@@ -136,6 +154,7 @@ export default function Progress() {
                                 tickLine={false} 
                                 tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} 
                                 dx={-10}
+                                domain={['auto', 'auto']}
                             />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: "hsl(var(--popover))", borderRadius: "8px", border: "1px solid hsl(var(--border))", color: "hsl(var(--popover-foreground))" }}
@@ -169,7 +188,7 @@ export default function Progress() {
                     </p>
                  </div>
                  <div className="bg-secondary/20 p-4 rounded-2xl border border-border">
-                    <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Total Sessions</p>
+                    <p className="text-xs text-muted-foreground font-bold uppercase mb-1">Sessions</p>
                     <p className="text-2xl font-mono font-bold text-foreground">
                         {chartData.length}
                     </p>
