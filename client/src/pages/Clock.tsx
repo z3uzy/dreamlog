@@ -2,13 +2,18 @@ import { Layout } from "@/components/Layout";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Play, Pause, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Play, Pause, RotateCcw, Plus, Trash2, Save } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Clock() {
-  const { timer, startTimer, pauseTimer, resetTimer, setTimerType } = useApp();
+  const { timer, timerPresets, startTimer, pauseTimer, resetTimer, setTimerType, saveTimerPreset, deleteTimerPreset } = useApp();
   const [displayTime, setDisplayTime] = useState(0);
+  const [customMinutes, setCustomMinutes] = useState("");
+  const [customSeconds, setCustomSeconds] = useState("");
+  const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
 
   useEffect(() => {
     // Immediate update on mount
@@ -21,11 +26,7 @@ export default function Clock() {
   const updateDisplay = () => {
     if (!timer.startTime) {
       if (timer.pausedAt && timer.type === 'stopwatch') {
-          setDisplayTime(timer.pausedAt - (timer.startTime || timer.pausedAt)); // Wait, if startTime is null, display should be 0 or held value?
-          // If reset, startTime is null. If paused, we need to track elapsed. 
-          // My store logic for pause sets pausedAt but keeps startTime null? No, store logic:
-          // pause: isRunning: false, pausedAt: now. startTime is preserved?
-          // Let's check store logic: resetTimer sets startTime: null.
+          setDisplayTime(timer.pausedAt - (timer.startTime || timer.pausedAt)); 
       } else if (timer.type === 'rest') {
           setDisplayTime(timer.duration);
       } else {
@@ -60,7 +61,32 @@ export default function Clock() {
       return `${mins}:${secs.toString().padStart(2, '0')}.${centis.toString().padStart(2, '0')}`;
   }
 
-  const PRESETS = [30, 60, 90, 120];
+  const handleStartCustom = () => {
+      const mins = parseInt(customMinutes) || 0;
+      const secs = parseInt(customSeconds) || 0;
+      if (mins === 0 && secs === 0) return;
+      
+      const duration = (mins * 60 + secs) * 1000;
+      resetTimer();
+      startTimer(duration);
+      setIsCustomDialogOpen(false);
+  };
+
+  const handleSaveCustom = () => {
+      const mins = parseInt(customMinutes) || 0;
+      const secs = parseInt(customSeconds) || 0;
+      if (mins === 0 && secs === 0) return;
+      
+      const duration = (mins * 60 + secs) * 1000;
+      
+      // Smart label
+      let label = "";
+      if (mins > 0) label += `${mins}m`;
+      if (secs > 0) label += `${secs}s`;
+      
+      saveTimerPreset(duration, label);
+      handleStartCustom();
+  };
 
   return (
     <Layout>
@@ -93,7 +119,7 @@ export default function Clock() {
                  {timer.isRunning ? (
                     <Button 
                         size="icon" 
-                        className="h-20 w-20 rounded-full bg-secondary hover:bg-secondary/80 text-foreground border-2 border-transparent"
+                        className="h-24 w-24 rounded-full bg-secondary hover:bg-secondary/80 text-foreground border-2 border-transparent"
                         onClick={() => pauseTimer()}
                     >
                         <Pause size={32} fill="currentColor" />
@@ -101,7 +127,7 @@ export default function Clock() {
                  ) : (
                     <Button 
                         size="icon" 
-                        className="h-20 w-20 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+                        className="h-24 w-24 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
                         onClick={() => startTimer()}
                     >
                         <Play size={32} fill="currentColor" className="ml-1" />
@@ -111,7 +137,7 @@ export default function Clock() {
                  <Button 
                     size="icon" 
                     variant="ghost"
-                    className="h-12 w-12 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    className="h-12 w-12 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 absolute bottom-32"
                     onClick={() => resetTimer()}
                  >
                     <RotateCcw size={20} />
@@ -120,23 +146,79 @@ export default function Clock() {
 
             {/* Rest Presets */}
             {timer.type === 'rest' && (
-                <div className="grid grid-cols-4 gap-3 w-full px-2">
-                    {PRESETS.map(seconds => (
-                        <Button
-                            key={seconds}
-                            variant="outline"
-                            className={cn(
-                                "h-12 rounded-xl border-border bg-card hover:bg-secondary hover:border-primary/50 transition-all",
-                                timer.duration === seconds * 1000 && "border-primary text-primary bg-primary/5"
-                            )}
-                            onClick={() => {
-                                resetTimer();
-                                startTimer(seconds * 1000);
-                            }}
-                        >
-                            {seconds}s
-                        </Button>
-                    ))}
+                <div className="w-full space-y-3">
+                    <div className="grid grid-cols-4 gap-3 w-full px-2">
+                        {timerPresets.map(preset => (
+                            <div key={preset.id} className="relative group">
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "w-full h-12 rounded-xl border-border bg-card hover:bg-secondary hover:border-primary/50 transition-all text-xs font-bold",
+                                        timer.duration === preset.duration && "border-primary text-primary bg-primary/5"
+                                    )}
+                                    onClick={() => {
+                                        resetTimer();
+                                        startTimer(preset.duration);
+                                    }}
+                                >
+                                    {preset.label}
+                                </Button>
+                                {/* Only allow deleting user presets? No, requirement implies deleting "saved" presets. Let's allow deleting all but maybe default? Or all? User can delete saved presets. */}
+                                <div 
+                                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 cursor-pointer shadow-sm transition-opacity"
+                                    onClick={(e) => { e.stopPropagation(); deleteTimerPreset(preset.id); }}
+                                >
+                                    <Trash2 size={10} />
+                                </div>
+                            </div>
+                        ))}
+                        
+                        <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="secondary"
+                                    className="h-12 rounded-xl border border-dashed border-border bg-transparent hover:bg-secondary/50"
+                                >
+                                    <Plus size={18} />
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-xs rounded-2xl bg-card border-border">
+                                <DialogHeader>
+                                    <DialogTitle>Custom Timer</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid grid-cols-2 gap-4 py-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase text-center block">Min</label>
+                                        <Input 
+                                            type="number" 
+                                            className="text-center text-2xl h-14 font-mono" 
+                                            placeholder="00" 
+                                            value={customMinutes}
+                                            onChange={(e) => setCustomMinutes(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase text-center block">Sec</label>
+                                        <Input 
+                                            type="number" 
+                                            className="text-center text-2xl h-14 font-mono" 
+                                            placeholder="00" 
+                                            value={customSeconds}
+                                            onChange={(e) => setCustomSeconds(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button className="flex-1" variant="outline" onClick={handleSaveCustom}>
+                                        <Save size={16} className="mr-2" /> Save & Start
+                                    </Button>
+                                    <Button className="flex-1" onClick={handleStartCustom}>
+                                        <Play size={16} className="mr-2" /> Start Only
+                                    </Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
             )}
           </div>

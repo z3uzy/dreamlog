@@ -50,6 +50,12 @@ export interface TimerState {
     isRunning: boolean;
 }
 
+export interface TimerPreset {
+    id: string;
+    duration: number; // ms
+    label: string;
+}
+
 // Initial Mock Data
 const DEFAULT_EXERCISES: Exercise[] = [
   { id: "e1", name: "Bench Press", muscleGroup: "Chest" },
@@ -128,6 +134,7 @@ interface AppState {
   theme: "dark" | "light";
   activeWorkoutId: string | null;
   timer: TimerState;
+  timerPresets: TimerPreset[];
 }
 
 interface AppContextType extends AppState {
@@ -148,6 +155,11 @@ interface AppContextType extends AppState {
   startTimer: (duration?: number) => void;
   pauseTimer: () => void;
   resetTimer: () => void;
+  saveTimerPreset: (duration: number, label: string) => void;
+  deleteTimerPreset: (id: string) => void;
+  // Data
+  exportData: (includePhotos: boolean) => Promise<void>;
+  importData: (file: File) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -186,6 +198,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return saved ? JSON.parse(saved) : { type: 'rest', startTime: null, duration: 60000, pausedAt: null, isRunning: false };
   });
 
+  const [timerPresets, setTimerPresets] = useState<TimerPreset[]>(() => {
+      const saved = localStorage.getItem("ironlog-timer-presets");
+      if (saved) return JSON.parse(saved);
+      return [
+          { id: "p1", duration: 30000, label: "30s" },
+          { id: "p2", duration: 60000, label: "60s" },
+          { id: "p3", duration: 90000, label: "90s" },
+          { id: "p4", duration: 120000, label: "2m" }
+      ];
+  });
+
   useEffect(() => {
     localStorage.setItem("ironlog-workouts", JSON.stringify(workouts));
   }, [workouts]);
@@ -205,6 +228,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
       localStorage.setItem("ironlog-timer", JSON.stringify(timer));
   }, [timer]);
+
+  useEffect(() => {
+      localStorage.setItem("ironlog-timer-presets", JSON.stringify(timerPresets));
+  }, [timerPresets]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -305,8 +332,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           
           if (prev.pausedAt && prev.startTime) {
               // Resuming: Adjust start time so elapsed time remains correct
-              // elapsed = pausedAt - startTime
-              // newStartTime = now - elapsed
               const elapsed = prev.pausedAt - prev.startTime;
               startTime = now - elapsed;
           }
@@ -338,6 +363,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
   };
 
+  const saveTimerPreset = (duration: number, label: string) => {
+      setTimerPresets(prev => [...prev, { id: crypto.randomUUID(), duration, label }]);
+  };
+
+  const deleteTimerPreset = (id: string) => {
+      setTimerPresets(prev => prev.filter(p => p.id !== id));
+  };
+
+  // Data Export/Import
+  const exportData = async (includePhotos: boolean) => {
+      const dataToExport = {
+          appVersion: "1.0.0",
+          exportDate: new Date().toISOString(),
+          workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
+          exercises,
+          globalNotes
+      };
+
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ironlog-export-${format(new Date(), 'yyyy-MM-dd')}.gymdata`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const importData = async (file: File) => {
+      return new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              try {
+                  const content = e.target?.result as string;
+                  const data = JSON.parse(content);
+                  
+                  // Basic validation
+                  if (!Array.isArray(data.workouts) || !Array.isArray(data.exercises)) {
+                      throw new Error("Invalid data format");
+                  }
+
+                  // Replace State
+                  setWorkouts(data.workouts);
+                  setExercises(data.exercises);
+                  if (data.globalNotes && Array.isArray(data.globalNotes)) {
+                      setGlobalNotes(data.globalNotes);
+                  }
+                  
+                  resolve();
+              } catch (err) {
+                  reject(err);
+              }
+          };
+          reader.onerror = () => reject(new Error("Failed to read file"));
+          reader.readAsText(file);
+      });
+  };
+
   return (
     <AppContext.Provider value={{
       workouts,
@@ -347,6 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       theme,
       activeWorkoutId,
       timer,
+      timerPresets,
       startWorkout,
       finishWorkout,
       updateWorkout,
@@ -361,7 +446,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTimerType,
       startTimer,
       pauseTimer,
-      resetTimer
+      resetTimer,
+      saveTimerPreset,
+      deleteTimerPreset,
+      exportData,
+      importData
     }}>
       {children}
     </AppContext.Provider>
