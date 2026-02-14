@@ -41,7 +41,7 @@ export default function Home() {
       <div className="p-4 space-y-6 max-w-md mx-auto animate-in fade-in duration-500">
         <header className="flex justify-between items-center py-2">
           <div>
-            <h1 className="text-2xl font-bold font-heading text-foreground">IronLog</h1>
+            <h1 className="text-2xl font-bold font-heading text-foreground">DreamLog</h1>
             <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, MMMM do")}</p>
           </div>
           <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-primary border border-border">

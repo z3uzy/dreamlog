@@ -2,12 +2,14 @@ import { Link, useLocation } from "wouter";
 import { Home, Dumbbell, BarChart2, Notebook, Settings, Plus, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/store";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { activeWorkoutId } = useApp();
   
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground pb-20 safe-area-bottom">
+      <UpdateBanner />
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>

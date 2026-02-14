@@ -167,13 +167,31 @@ export default function WorkoutPage() {
     };
 
     const handlePhotoUpload = () => {
-        // Mock photo upload
-        const mockUrl = "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80";
-        updateWorkout({ ...workout, photoUrl: mockUrl });
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+             updateWorkout({ ...workout, photoUrl: reader.result as string });
+          };
+          reader.readAsDataURL(file);
+        }
     };
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
+      {/* Hidden File Input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*" 
+        onChange={handleFileChange}
+      />
+      
       {/* Header */}
       <header className="flex items-center justify-between p-4 border-b border-border bg-card/50 backdrop-blur-md sticky top-0 z-10">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/")} className="h-8 w-8 -ml-2">

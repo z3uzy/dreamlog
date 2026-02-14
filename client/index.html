@@ -3,14 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=0" />
+    <meta name="theme-color" content="#0a0a0a" />
 
-    <meta property="og:title" content="IronLog - Gym Tracker" />
+    <title>DreamLog</title>
+    <link rel="manifest" href="/manifest.json" />
+
+    <meta property="og:title" content="DreamLog - Gym Tracker" />
     <meta property="og:description" content="Minimal, fast, focus-driven workout logger." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://replit.com/public/images/opengraph.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@replit" />
-    <meta name="twitter:title" content="IronLog - Gym Tracker" />
+    <meta name="twitter:title" content="DreamLog - Gym Tracker" />
     <meta name="twitter:description" content="Minimal, fast, focus-driven workout logger." />
     <meta name="twitter:image" content="https://replit.com/public/images/opengraph.png" />
 
@@ -22,5 +26,46 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('SW registered: ', registration);
+              
+              // Check for updates
+              registration.onupdatefound = () => {
+                const installingWorker = registration.installing;
+                if (installingWorker == null) {
+                  return;
+                }
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed') {
+                    if (navigator.serviceWorker.controller) {
+                      // New update available
+                      window.dispatchEvent(new Event('sw-update-available'));
+                      console.log('New content is available; please refresh.');
+                    } else {
+                      // Content is cached for offline use
+                      console.log('Content is cached for offline use.');
+                    }
+                  }
+                };
+              };
+            })
+            .catch(registrationError => {
+              console.log('SW registration failed: ', registrationError);
+            });
+            
+            // Handle controller change (reload page)
+            let refreshing;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                window.location.reload();
+                refreshing = true;
+            });
+        });
+      }
+    </script>
   </body>
 </html>
