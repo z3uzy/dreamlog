@@ -98,7 +98,7 @@ export default function Settings() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6 max-w-md mx-auto animate-in fade-in duration-500">
+      <div className="p-4 space-y-6 max-w-md mx-auto animate-in fade-in duration-500 pb-10">
         <h1 className="text-2xl font-bold font-heading">Settings</h1>
 
         <div className="space-y-6">
@@ -199,7 +199,7 @@ export default function Settings() {
                      <div className="p-4 flex items-center gap-3">
                         <Info size={18} className="text-muted-foreground" />
                         <div>
-                            <p className="font-medium">DreamLog v1.0.0</p>
+                            <p className="font-medium">DreamLog v1.0.1</p>
                             <p className="text-xs text-muted-foreground">PWA Build</p>
                         </div>
                     </div>

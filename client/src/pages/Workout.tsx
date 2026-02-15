@@ -209,9 +209,9 @@ export default function WorkoutPage() {
                     className="h-7 text-center font-bold text-sm bg-background border-primary"
                  />
              ) : (
-                 <div className="flex items-center gap-2 group cursor-pointer" onClick={() => !isReadonly && setIsEditingTitle(true)}>
+                 <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setIsEditingTitle(true)}>
                      <span className="font-bold text-sm truncate max-w-[150px]">{workout.name}</span>
-                     {!isReadonly && <Pencil size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />}
+                     <Pencil size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
                  </div>
              )}
              <span className="text-xs font-mono text-primary font-medium">{isReadonly ? "Finished" : formatTime(elapsedTime)}</span>
@@ -281,7 +281,6 @@ export default function WorkoutPage() {
                 placeholder="How did it feel?"
                 value={workout.notes || ""}
                 onChange={(e) => updateWorkout({...workout, notes: e.target.value})}
-                readOnly={isReadonly}
             />
         </div>
         

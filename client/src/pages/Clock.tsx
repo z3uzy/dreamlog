@@ -15,6 +15,8 @@ export default function Clock() {
   const [customSeconds, setCustomSeconds] = useState("");
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
 
+  const [hasPlayedSound, setHasPlayedSound] = useState(false);
+
   useEffect(() => {
     // Immediate update on mount
     updateDisplay();
@@ -23,14 +25,41 @@ export default function Clock() {
     return () => clearInterval(interval);
   }, [timer]);
 
+  const playBeep = () => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.frequency.value = 880; // A5
+        osc.type = "sine";
+        
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+        console.error("Audio play failed", e);
+    }
+  };
+
   const updateDisplay = () => {
     if (!timer.startTime) {
       if (timer.pausedAt && timer.type === 'stopwatch') {
           setDisplayTime(timer.pausedAt - (timer.startTime || timer.pausedAt)); 
       } else if (timer.type === 'rest') {
           setDisplayTime(timer.duration);
+          setHasPlayedSound(false);
       } else {
           setDisplayTime(0);
+          setHasPlayedSound(false);
       }
       return;
     }
@@ -43,6 +72,11 @@ export default function Clock() {
     } else {
       const remaining = Math.max(0, timer.duration - elapsed);
       setDisplayTime(remaining);
+      
+      if (remaining === 0 && !hasPlayedSound && timer.isRunning) {
+          playBeep();
+          setHasPlayedSound(true);
+      }
     }
   };
 
@@ -115,32 +149,34 @@ export default function Clock() {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-6">
-                 {timer.isRunning ? (
-                    <Button 
-                        size="icon" 
-                        className="h-24 w-24 rounded-full bg-secondary hover:bg-secondary/80 text-foreground border-2 border-transparent"
-                        onClick={() => pauseTimer()}
-                    >
-                        <Pause size={32} fill="currentColor" />
-                    </Button>
-                 ) : (
-                    <Button 
-                        size="icon" 
-                        className="h-24 w-24 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
-                        onClick={() => startTimer()}
-                    >
-                        <Play size={32} fill="currentColor" className="ml-1" />
-                    </Button>
-                 )}
+            <div className="flex flex-col items-center gap-8 w-full max-w-[200px]">
+                 <div className="flex items-center justify-center">
+                     {timer.isRunning ? (
+                        <Button 
+                            size="icon" 
+                            className="h-24 w-24 rounded-full bg-secondary hover:bg-secondary/80 text-foreground border-2 border-transparent"
+                            onClick={() => pauseTimer()}
+                        >
+                            <Pause size={32} fill="currentColor" />
+                        </Button>
+                     ) : (
+                        <Button 
+                            size="icon" 
+                            className="h-24 w-24 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+                            onClick={() => startTimer()}
+                        >
+                            <Play size={32} fill="currentColor" className="ml-1" />
+                        </Button>
+                     )}
+                 </div>
 
                  <Button 
                     size="icon" 
                     variant="ghost"
-                    className="h-12 w-12 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 absolute bottom-32"
-                    onClick={() => resetTimer()}
+                    className="h-12 w-12 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    onClick={() => { resetTimer(); setHasPlayedSound(false); }}
                  >
-                    <RotateCcw size={20} />
+                    <RotateCcw size={24} />
                  </Button>
             </div>
 
