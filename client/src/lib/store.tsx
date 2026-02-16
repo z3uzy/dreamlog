@@ -29,12 +29,38 @@ export interface Workout {
   id: string;
   name: string;
   date: string; // ISO string
+  status: "in_progress" | "finished";
   exercises: WorkoutExercise[];
   notes?: string;
   photoUrl?: string;
   startTime: string;
   endTime?: string;
 }
+
+// Helper to normalize workout data structure
+const normalizeWorkout = (w: any): Workout => {
+    return {
+        id: w.id || crypto.randomUUID(),
+        name: w.name || "Untitled Workout",
+        date: w.date || new Date().toISOString(),
+        status: w.status || (w.endTime ? "finished" : "in_progress"),
+        startTime: w.startTime || new Date().toISOString(),
+        endTime: w.endTime,
+        notes: w.notes || "",
+        photoUrl: w.photoUrl,
+        exercises: Array.isArray(w.exercises) ? w.exercises.map((e: any) => ({
+            id: e.id || crypto.randomUUID(),
+            exerciseId: e.exerciseId,
+            notes: e.notes,
+            sets: Array.isArray(e.sets) ? e.sets.map((s: any, idx: number) => ({
+                id: s.id || crypto.randomUUID(),
+                reps: Number(s.reps) || 0,
+                weight: Number(s.weight) || 0,
+                completed: !!s.completed
+            })) : []
+        })) : []
+    };
+};
 
 export interface Note {
   id: string;
@@ -75,6 +101,7 @@ const MOCK_WORKOUTS: Workout[] = [
     id: "w1",
     name: "Push Day",
     date: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 days ago
+    status: "finished",
     startTime: new Date(Date.now() - 86400000 * 2).toISOString(),
     endTime: new Date(Date.now() - 86400000 * 2 + 3600000).toISOString(),
     exercises: [
@@ -102,6 +129,7 @@ const MOCK_WORKOUTS: Workout[] = [
     id: "w2",
     name: "Pull Day",
     date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+    status: "finished",
     startTime: new Date(Date.now() - 86400000).toISOString(),
     endTime: new Date(Date.now() - 86400000 + 4000000).toISOString(),
     exercises: [
@@ -168,7 +196,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [workouts, setWorkouts] = useState<Workout[]>(() => {
     const saved = localStorage.getItem("ironlog-workouts");
-    return saved ? JSON.parse(saved) : MOCK_WORKOUTS;
+    const parsed = saved ? JSON.parse(saved) : MOCK_WORKOUTS;
+    return Array.isArray(parsed) ? parsed.map(normalizeWorkout) : MOCK_WORKOUTS.map(normalizeWorkout);
   });
 
   const [exercises, setExercises] = useState<Exercise[]>(() => {
@@ -245,6 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: crypto.randomUUID(),
       name: templateName,
       date: new Date().toISOString(),
+      status: "in_progress",
       startTime: new Date().toISOString(),
       exercises: [],
       notes: ""
@@ -274,12 +304,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const finishWorkout = () => {
-    setWorkouts(prev => prev.map(w => {
-      if (w.id === activeWorkoutId) {
-        return { ...w, endTime: new Date().toISOString() };
-      }
-      return w;
-    }));
+    const endTime = new Date().toISOString();
+    setWorkouts(prev => {
+        const updated = prev.map(w => {
+          if (w.id === activeWorkoutId) {
+            return { ...w, status: "finished" as const, endTime };
+          }
+          return w;
+        });
+        localStorage.setItem("ironlog-workouts", JSON.stringify(updated));
+        return updated;
+    });
     setActiveWorkoutId(null);
   };
 
@@ -289,7 +324,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteWorkout = (id: string) => {
     if (activeWorkoutId === id) setActiveWorkoutId(null);
-    setWorkouts(prev => prev.filter(w => w.id !== id));
+    setWorkouts(prev => {
+        const updated = prev.filter(w => w.id !== id);
+        localStorage.setItem("ironlog-workouts", JSON.stringify(updated));
+        return updated;
+    });
   };
 
   const addExercise = (newExercise: Exercise) => {
@@ -445,11 +484,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   }
 
                   // Replace State
-                  setWorkouts(data.workouts);
+                  const normalizedWorkouts = Array.isArray(data.workouts) ? data.workouts.map(normalizeWorkout) : [];
+                  setWorkouts(normalizedWorkouts);
                   setExercises(data.exercises);
                   if (data.globalNotes && Array.isArray(data.globalNotes)) {
                       setGlobalNotes(data.globalNotes);
                   }
+                  
+                  // Persist immediately
+                  localStorage.setItem("ironlog-workouts", JSON.stringify(normalizedWorkouts));
+                  localStorage.setItem("ironlog-exercises", JSON.stringify(data.exercises));
+                  if (data.globalNotes) localStorage.setItem("ironlog-notes", JSON.stringify(data.globalNotes));
                   
                   resolve();
               } catch (err) {

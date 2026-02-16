@@ -7,6 +7,17 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus, Trash2, Check, Clock, Save, Camera, MoreVertical, X, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Drawer,
   DrawerClose,
   DrawerContent,
@@ -31,6 +42,7 @@ export default function WorkoutPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Timer logic
@@ -84,7 +96,8 @@ export default function WorkoutPage() {
 
   const handleFinish = () => {
     finishWorkout();
-    setLocation("/");
+    // Force simple redirect
+    window.location.href = "/";
   };
 
   const saveTitle = () => {
@@ -181,6 +194,11 @@ export default function WorkoutPage() {
           reader.readAsDataURL(file);
         }
     };
+
+  const handleDeleteWorkout = () => {
+      deleteWorkout(workout.id);
+      setLocation("/");
+  };
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -284,13 +302,28 @@ export default function WorkoutPage() {
             />
         </div>
         
-        {isReadonly && (
-            <div className="pt-4 flex justify-center">
-                 <Button variant="destructive" onClick={() => { deleteWorkout(workout.id); setLocation("/"); }}>
-                    Delete Workout
-                 </Button>
-            </div>
-        )}
+        <div className="pt-4 flex justify-center pb-8">
+             <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)} className="w-full max-w-xs">
+                Delete Workout
+             </Button>
+        </div>
+
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-xs">
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Workout?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will permanently remove this workout and its stats.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteWorkout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl">
+                        Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
