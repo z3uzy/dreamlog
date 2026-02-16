@@ -39,8 +39,9 @@ export interface Workout {
 
 // Helper to normalize workout data structure
 const normalizeWorkout = (w: any): Workout => {
+    const workoutId = w.id || crypto.randomUUID();
     return {
-        id: w.id || crypto.randomUUID(),
+        id: workoutId,
         name: w.name || "Untitled Workout",
         date: w.date || new Date().toISOString(),
         status: w.status || (w.endTime ? "finished" : "in_progress"),
@@ -50,14 +51,14 @@ const normalizeWorkout = (w: any): Workout => {
         photoUrl: w.photoUrl,
         exercises: Array.isArray(w.exercises) ? w.exercises.map((e: any) => ({
             id: e.id || crypto.randomUUID(),
-            exerciseId: e.exerciseId,
-            notes: e.notes,
-            sets: Array.isArray(e.sets) ? e.sets.map((s: any, idx: number) => ({
+            exerciseId: e.exerciseId || "unknown",
+            notes: e.notes || "",
+            sets: (Array.isArray(e.sets) && e.sets.length > 0) ? e.sets.map((s: any, idx: number) => ({
                 id: s.id || crypto.randomUUID(),
                 reps: Number(s.reps) || 0,
                 weight: Number(s.weight) || 0,
                 completed: !!s.completed
-            })) : []
+            })) : [{ id: crypto.randomUUID(), reps: 0, weight: 0, completed: false }]
         })) : []
     };
 };
@@ -184,6 +185,7 @@ interface AppContextType extends AppState {
   pauseTimer: () => void;
   resetTimer: () => void;
   saveTimerPreset: (duration: number, label: string) => void;
+  updateTimerPreset: (id: string, duration: number, label: string) => void;
   deleteTimerPreset: (id: string) => void;
   // Data
   exportData: (includePhotos: boolean) => Promise<void>;
@@ -305,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const finishWorkout = () => {
     const endTime = new Date().toISOString();
+    
+    // Immediate state update with persistence
     setWorkouts(prev => {
         const updated = prev.map(w => {
           if (w.id === activeWorkoutId) {
@@ -315,6 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("ironlog-workouts", JSON.stringify(updated));
         return updated;
     });
+    
     setActiveWorkoutId(null);
   };
 
@@ -329,6 +334,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("ironlog-workouts", JSON.stringify(updated));
         return updated;
     });
+  };
+
+  const updateTimerPreset = (id: string, duration: number, label: string) => {
+      setTimerPresets(prev => prev.map(p => p.id === id ? { ...p, duration, label } : p));
   };
 
   const addExercise = (newExercise: Exercise) => {
@@ -532,6 +541,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pauseTimer,
       resetTimer,
       saveTimerPreset,
+      updateTimerPreset,
       deleteTimerPreset,
       exportData,
       exportDataManually,

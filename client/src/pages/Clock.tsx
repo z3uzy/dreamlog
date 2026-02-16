@@ -6,24 +6,42 @@ import { Play, Pause, RotateCcw, Plus, Trash2, Save, Pencil } from "lucide-react
 import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
 export default function Clock() {
-  const { timer, timerPresets, startTimer, pauseTimer, resetTimer, setTimerType, saveTimerPreset, deleteTimerPreset } = useApp();
+  const { timer, timerPresets, startTimer, pauseTimer, resetTimer, setTimerType, saveTimerPreset, updateTimerPreset, deleteTimerPreset } = useApp();
   const [displayTime, setDisplayTime] = useState(0);
   const [customMinutes, setCustomMinutes] = useState("");
   const [customSeconds, setCustomSeconds] = useState("");
   const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
+  
+  // Edit Preset State
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editMinutes, setEditMinutes] = useState("");
+  const [editSeconds, setEditSeconds] = useState("");
 
   const [hasPlayedSound, setHasPlayedSound] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     // Mobile Audio Unlock on first interaction
     const unlockAudio = () => {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
-            const ctx = new AudioContext();
-            ctx.resume();
+            if (!audioContextRef.current) {
+                audioContextRef.current = new AudioContext();
+            }
+            // Resume if suspended (common on mobile)
+            if (audioContextRef.current.state === 'suspended') {
+                audioContextRef.current.resume();
+            }
+            // Play silent buffer to unlock
+            const buffer = audioContextRef.current.createBuffer(1, 1, 22050);
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContextRef.current.destination);
+            source.start(0);
         }
         window.removeEventListener('touchstart', unlockAudio);
         window.removeEventListener('click', unlockAudio);
@@ -51,18 +69,30 @@ export default function Clock() {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
         
-        const ctx = new AudioContext();
+        // Use existing context if available, otherwise create new
+        if (!audioContextRef.current) {
+            audioContextRef.current = new AudioContext();
+        }
+        const ctx = audioContextRef.current;
+        
+        // Ensure running
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         
         osc.connect(gain);
         gain.connect(ctx.destination);
         
-        osc.frequency.value = 880; // A5
+        // Beep Sound: High pitch short beep
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
         osc.type = "sine";
         
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
         
         osc.start();
         osc.stop(ctx.currentTime + 0.5);
@@ -143,6 +173,30 @@ export default function Clock() {
       handleStartCustom();
   };
 
+  const openEditDialog = (preset: any) => {
+      setEditingPresetId(preset.id);
+      const totalSecs = Math.ceil(preset.duration / 1000);
+      setEditMinutes(Math.floor(totalSecs / 60).toString());
+      setEditSeconds((totalSecs % 60).toString());
+      setIsEditDialogOpen(true);
+  };
+
+  const handleUpdatePreset = () => {
+      if (!editingPresetId) return;
+      const mins = parseInt(editMinutes) || 0;
+      const secs = parseInt(editSeconds) || 0;
+      if (mins === 0 && secs === 0) return;
+
+      const duration = (mins * 60 + secs) * 1000;
+      let label = "";
+      if (mins > 0) label += `${mins}m`;
+      if (secs > 0) label += `${secs}s`;
+
+      updateTimerPreset(editingPresetId, duration, label);
+      setIsEditDialogOpen(false);
+      setEditingPresetId(null);
+  };
+
   return (
     <Layout>
       <div className="p-4 space-y-6 max-w-md mx-auto animate-in fade-in duration-500 h-full flex flex-col">
@@ -220,22 +274,12 @@ export default function Clock() {
                                 >
                                     {preset.label}
                                 </Button>
-                                {/* Only allow deleting user presets? No, requirement implies deleting "saved" presets. Let's allow deleting all but maybe default? Or all? User can delete saved presets. */}
                                 <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {/* Edit Logic could go here but let's keep it simple with just delete for now as per "minimal" requirement, or maybe user wants edit? Req says "Edit/Delete". */}
-                                    {/* Let's just allow deleting for simplicity in this patch, unless user explicitly clicked edit? Actually user asked for "Edit/Delete". */}
-                                    {/* For edit, we can just load it into custom? */}
                                     <div 
                                         className="bg-primary text-primary-foreground rounded-full p-1 cursor-pointer shadow-sm"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            const totalSecs = Math.ceil(preset.duration / 1000);
-                                            setCustomMinutes(Math.floor(totalSecs / 60).toString());
-                                            setCustomSeconds((totalSecs % 60).toString());
-                                            setIsCustomDialogOpen(true);
-                                            // Ideally we'd update the existing one, but saving new is easier. 
-                                            // Let's delete this one if they save? No, that's complex.
-                                            // Let's just load it.
+                                            openEditDialog(preset);
                                         }}
                                     >
                                        <Pencil size={10} />
@@ -293,6 +337,42 @@ export default function Clock() {
                                         <Play size={16} className="mr-2" /> Start Only
                                     </Button>
                                 </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        {/* Edit Dialog */}
+                        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                            <DialogContent className="sm:max-w-xs rounded-2xl bg-card border-border">
+                                <DialogHeader>
+                                    <DialogTitle>Edit Timer</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid grid-cols-2 gap-4 py-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase text-center block">Min</label>
+                                        <Input 
+                                            type="number" 
+                                            className="text-center text-2xl h-14 font-mono" 
+                                            placeholder="00" 
+                                            value={editMinutes}
+                                            onChange={(e) => setEditMinutes(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase text-center block">Sec</label>
+                                        <Input 
+                                            type="number" 
+                                            className="text-center text-2xl h-14 font-mono" 
+                                            placeholder="00" 
+                                            value={editSeconds}
+                                            onChange={(e) => setEditSeconds(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button onClick={handleUpdatePreset} className="w-full">
+                                        Update Preset
+                                    </Button>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </div>

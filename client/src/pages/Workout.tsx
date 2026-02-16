@@ -96,8 +96,7 @@ export default function WorkoutPage() {
 
   const handleFinish = () => {
     finishWorkout();
-    // Force simple redirect
-    window.location.href = "/";
+    setLocation("/");
   };
 
   const saveTitle = () => {
