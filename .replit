@@ -27,7 +27,3 @@ mode = "sequential"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[agent]
-stack = "MOCKUP_JS"
-mockupState = "MOCKUP"
