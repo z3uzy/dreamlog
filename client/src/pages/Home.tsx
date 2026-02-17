@@ -1,14 +1,18 @@
-import { useApp } from "@/lib/store";
-import { format, isToday, isYesterday } from "date-fns";
+import { useApp, Workout } from "@/lib/store";
+import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
 import { Link, useLocation } from "wouter";
-import { Plus, ChevronRight, Play, Calendar } from "lucide-react";
+import { Plus, ChevronRight, Play, Calendar, Dumbbell, Clock, Trophy, Weight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layout } from "@/components/Layout";
 
 export default function Home() {
-  const { workouts, startWorkout, activeWorkoutId, exercises } = useApp();
+  const { workouts, startWorkout, activeWorkoutId, exercises, unitSystem } = useApp();
   const [, setLocation] = useLocation();
+
+  const lastCompletedWorkout = workouts
+    .filter(w => w.endTime && w.status === "finished")
+    .sort((a, b) => new Date(b.endTime!).getTime() - new Date(a.endTime!).getTime())[0] || null;
 
   const handleStartWorkout = (template?: string) => {
     if (activeWorkoutId) {
@@ -58,6 +62,16 @@ export default function Home() {
              </div>
              <Button size="sm" className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">Resume</Button>
           </div>
+        )}
+
+        {/* Last Workout Summary */}
+        {lastCompletedWorkout && !activeWorkoutId && (
+          <LastWorkoutSummary 
+            workout={lastCompletedWorkout} 
+            exercises={exercises} 
+            unitSystem={unitSystem}
+            onClick={() => setLocation(`/workout/${lastCompletedWorkout.id}`)}
+          />
         )}
 
         {/* Quick Start */}
@@ -133,6 +147,94 @@ export default function Home() {
         </section>
       </div>
     </Layout>
+  );
+}
+
+function LastWorkoutSummary({ workout, exercises: allExercises, unitSystem, onClick }: { 
+  workout: Workout, 
+  exercises: { id: string; name: string; muscleGroup: string }[], 
+  unitSystem: string,
+  onClick: () => void 
+}) {
+  const totalSets = workout.exercises.reduce((acc, ex) => acc + ex.sets.filter(s => s.completed).length, 0);
+  const totalVolume = workout.exercises.reduce((acc, ex) => 
+    acc + ex.sets.filter(s => s.completed).reduce((sum, s) => sum + (s.weight * s.reps), 0), 0
+  );
+  const exerciseNames = workout.exercises.slice(0, 3).map(we => {
+    const ex = allExercises.find(e => e.id === we.exerciseId);
+    return ex ? ex.name : "Unknown";
+  });
+
+  const duration = workout.endTime && workout.startTime
+    ? Math.round((new Date(workout.endTime).getTime() - new Date(workout.startTime).getTime()) / 60000)
+    : 0;
+
+  const timeAgo = workout.endTime 
+    ? formatDistanceToNow(new Date(workout.endTime), { addSuffix: true })
+    : "";
+
+  return (
+    <div 
+      data-testid="card-last-workout"
+      onClick={onClick}
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-card border border-primary/20 p-4 cursor-pointer transition-all duration-300 hover:border-primary/40 hover:shadow-lg group"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
+            <Trophy size={14} className="text-primary" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Last Workout</p>
+            <h3 className="font-bold text-foreground text-sm leading-tight">{workout.name}</h3>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] text-muted-foreground">{timeAgo}</p>
+          <ChevronRight size={14} className="text-muted-foreground group-hover:text-primary transition-colors ml-auto" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-background/50 rounded-xl p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <Dumbbell size={12} className="text-muted-foreground" />
+          </div>
+          <p className="text-sm font-bold font-mono text-foreground">{workout.exercises.length}</p>
+          <p className="text-[10px] text-muted-foreground">Exercises</p>
+        </div>
+        <div className="bg-background/50 rounded-xl p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <Trophy size={12} className="text-muted-foreground" />
+          </div>
+          <p className="text-sm font-bold font-mono text-foreground">{totalSets}</p>
+          <p className="text-[10px] text-muted-foreground">Sets</p>
+        </div>
+        <div className="bg-background/50 rounded-xl p-2.5 text-center">
+          <div className="flex items-center justify-center gap-1 mb-1">
+            <Clock size={12} className="text-muted-foreground" />
+          </div>
+          <p className="text-sm font-bold font-mono text-foreground">{duration}m</p>
+          <p className="text-[10px] text-muted-foreground">Duration</p>
+        </div>
+      </div>
+
+      {totalVolume > 0 && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="font-medium">Total Volume:</span>
+          <span className="font-bold font-mono text-foreground">{totalVolume.toLocaleString()} {unitSystem}</span>
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {exerciseNames.map((name, i) => (
+          <span key={i} className="text-[10px] bg-secondary/50 text-muted-foreground px-2 py-0.5 rounded-full">{name}</span>
+        ))}
+        {workout.exercises.length > 3 && (
+          <span className="text-[10px] text-primary/70 px-1 py-0.5">+{workout.exercises.length - 3} more</span>
+        )}
+      </div>
+    </div>
   );
 }
 
