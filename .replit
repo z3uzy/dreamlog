@@ -28,7 +28,6 @@ args = "npm run dev"
 waitForPort = 5000
 
 [deployment]
-deploymentTarget = "nodejs"
-build = ["npm", "run", "build"]
-run = ["node", "dist/index.cjs"]
+run = "npm start"
+build = "npm run build"
 
