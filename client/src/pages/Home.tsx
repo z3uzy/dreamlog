@@ -27,8 +27,10 @@ export default function Home() {
     }
   };
 
-  const todaysWorkouts = workouts.filter(w => isToday(new Date(w.date)));
-  const recentWorkouts = workouts.filter(w => !isToday(new Date(w.date)) && w.endTime).slice(0, 5);
+  const recentWorkouts = [...workouts]
+    .filter(w => w.status === "finished")
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
 
   const getExerciseSummary = (workout: any) => {
      const count = workout.exercises.length;
@@ -127,18 +129,8 @@ export default function Home() {
           </div>
           
           <div className="space-y-3">
-            {todaysWorkouts.length > 0 && (
-                <div className="space-y-2">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Today</p>
-                    {todaysWorkouts.map(workout => (
-                        <WorkoutCard key={workout.id} workout={workout} summary={getExerciseSummary(workout)} />
-                    ))}
-                </div>
-            )}
-
             <div className="space-y-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Previous</p>
-                 {recentWorkouts.map(workout => (
+                {recentWorkouts.map(workout => (
                     <WorkoutCard key={workout.id} workout={workout} summary={getExerciseSummary(workout)} />
                 ))}
                 {recentWorkouts.length === 0 && <p className="text-sm text-muted-foreground">No recent workouts.</p>}
