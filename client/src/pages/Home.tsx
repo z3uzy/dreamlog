@@ -30,7 +30,7 @@ export default function Home() {
   const recentWorkouts = [...workouts]
     .filter(w => w.status === "finished")
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5);
+    .slice(0, 10);
 
   const getExerciseSummary = (workout: any) => {
      const count = workout.exercises.length;
