@@ -480,39 +480,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importData = async (file: File) => {
-      return new Promise<void>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-              try {
-                  const content = e.target?.result as string;
-                  const data = JSON.parse(content);
-                  
-                  // Basic validation
-                  if (!Array.isArray(data.workouts) || !Array.isArray(data.exercises)) {
-                      throw new Error("Invalid data format");
-                  }
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          let data;
+          try {
+            data = JSON.parse(content);
+          } catch (parseErr) {
+            console.error("JSON Parse Error:", parseErr);
+            alert("Invalid backup file: Not a valid JSON.");
+            return reject(new Error("Invalid JSON"));
+          }
 
-                  // Replace State
-                  const normalizedWorkouts = Array.isArray(data.workouts) ? data.workouts.map(normalizeWorkout) : [];
-                  setWorkouts(normalizedWorkouts);
-                  setExercises(data.exercises);
-                  if (data.globalNotes && Array.isArray(data.globalNotes)) {
-                      setGlobalNotes(data.globalNotes);
-                  }
-                  
-                  // Persist immediately
-                  localStorage.setItem("ironlog-workouts", JSON.stringify(normalizedWorkouts));
-                  localStorage.setItem("ironlog-exercises", JSON.stringify(data.exercises));
-                  if (data.globalNotes) localStorage.setItem("ironlog-notes", JSON.stringify(data.globalNotes));
-                  
-                  resolve();
-              } catch (err) {
-                  reject(err);
-              }
-          };
-          reader.onerror = () => reject(new Error("Failed to read file"));
-          reader.readAsText(file);
-      });
+          // Validation
+          if (!data || typeof data !== 'object') {
+            alert("Invalid backup file: Content is not an object.");
+            return reject(new Error("Invalid backup format"));
+          }
+
+          if (!Array.isArray(data.workouts) || !Array.isArray(data.exercises)) {
+            console.error("Validation Error: Missing workouts or exercises arrays", data);
+            alert("Invalid backup file: Missing required workout or exercise data.");
+            return reject(new Error("Invalid data structure"));
+          }
+
+          // Safe Normalization with fallbacks
+          const normalizedWorkouts = data.workouts.map((w: any) => {
+            try {
+              return normalizeWorkout(w);
+            } catch (normErr) {
+              console.error("Normalization error for workout:", w, normErr);
+              // Return a minimal safe workout object if normalization fails
+              return {
+                id: w?.id || crypto.randomUUID(),
+                name: w?.name || "Recovered Workout",
+                date: w?.date || new Date().toISOString(),
+                status: "finished",
+                startTime: w?.startTime || new Date().toISOString(),
+                exercises: [],
+                notes: "Data recovered after import error"
+              } as Workout;
+            }
+          });
+
+          const safeExercises = data.exercises.filter((ex: any) => ex && typeof ex.id === 'string' && typeof ex.name === 'string');
+          const safeNotes = Array.isArray(data.globalNotes) 
+            ? data.globalNotes.filter((n: any) => n && typeof n.id === 'string' && typeof n.text === 'string')
+            : [];
+
+          // Success - Update State
+          setWorkouts(normalizedWorkouts);
+          setExercises(safeExercises.length > 0 ? safeExercises : DEFAULT_EXERCISES);
+          setGlobalNotes(safeNotes);
+
+          // Persist immediately
+          localStorage.setItem("ironlog-workouts", JSON.stringify(normalizedWorkouts));
+          localStorage.setItem("ironlog-exercises", JSON.stringify(safeExercises.length > 0 ? safeExercises : DEFAULT_EXERCISES));
+          localStorage.setItem("ironlog-notes", JSON.stringify(safeNotes));
+
+          resolve();
+        } catch (err) {
+          console.error("Import process error:", err);
+          alert("An unexpected error occurred during import.");
+          reject(err);
+        }
+      };
+      reader.onerror = () => {
+        console.error("FileReader error");
+        alert("Failed to read the backup file.");
+        reject(new Error("Failed to read file"));
+      };
+      reader.readAsText(file);
+    });
   };
 
   return (
