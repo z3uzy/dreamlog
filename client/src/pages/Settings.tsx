@@ -199,7 +199,7 @@ export default function Settings() {
                      <div className="p-4 flex items-center gap-3">
                         <Info size={18} className="text-muted-foreground" />
                         <div>
-                            <p className="font-medium">DreamLog v1.0.2</p>
+                            <p className="font-medium">DreamLog v1.0.3</p>
                             <p className="text-xs text-muted-foreground">Stability Patch</p>
                         </div>
                     </div>

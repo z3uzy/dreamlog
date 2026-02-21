@@ -195,6 +195,35 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Data Versioning
+const CURRENT_SCHEMA_VERSION = 1;
+
+interface BackupEnvelope {
+  app: "DreamLog";
+  schemaVersion: number;
+  exportedAt: string;
+  data: {
+    workouts: Workout[];
+    exercises: Exercise[];
+    globalNotes: Note[];
+    appVersion?: string;
+    exportDate?: string;
+  };
+}
+
+const migrate = (data: any, fromVersion: number): any => {
+  console.log(`Running migration from version ${fromVersion} to ${CURRENT_SCHEMA_VERSION}`);
+  
+  if (fromVersion === CURRENT_SCHEMA_VERSION) {
+    return data;
+  }
+
+  // Future migrations will be added here
+  // if (fromVersion === 0) { ... }
+
+  return data;
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [workouts, setWorkouts] = useState<Workout[]>(() => {
     const saved = localStorage.getItem("ironlog-workouts");
@@ -422,15 +451,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Data Export/Import
   const exportData = async (includePhotos: boolean) => {
-      const dataToExport = {
-          appVersion: "1.0.0",
+      const internalData = {
+          appVersion: "1.0.3",
           exportDate: new Date().toISOString(),
           workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
           exercises,
           globalNotes
       };
 
-      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
+      const envelope: BackupEnvelope = {
+        app: "DreamLog",
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: internalData
+      };
+
+      const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -442,16 +478,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const exportDataManually = async (includePhotos: boolean): Promise<string> => {
-      const dataToExport = {
-          appVersion: "1.0.0",
+      const internalData = {
+          appVersion: "1.0.3",
           exportDate: new Date().toISOString(),
           workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
           exercises,
           globalNotes
       };
       
-      const fileName = `IronLog_Backup_${format(new Date(), 'yyyyMMdd')}.gymdata`;
-      const jsonStr = JSON.stringify(dataToExport, null, 2);
+      const envelope: BackupEnvelope = {
+        app: "DreamLog",
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: internalData
+      };
+      
+      const fileName = `DreamLog_Backup_${format(new Date(), 'yyyyMMdd')}.gymdata`;
+      const jsonStr = JSON.stringify(envelope, null, 2);
 
       if ('showSaveFilePicker' in window) {
           try {
@@ -485,34 +528,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reader.onload = (e) => {
         try {
           const content = e.target?.result as string;
-          let data;
+          let rawData: any;
           try {
-            data = JSON.parse(content);
+            rawData = JSON.parse(content);
           } catch (parseErr) {
             console.error("JSON Parse Error:", parseErr);
             alert("Invalid backup file: Not a valid JSON.");
             return reject(new Error("Invalid JSON"));
           }
 
-          // Validation
-          if (!data || typeof data !== 'object') {
+          if (!rawData || typeof rawData !== 'object') {
             alert("Invalid backup file: Content is not an object.");
             return reject(new Error("Invalid backup format"));
           }
 
-          if (!Array.isArray(data.workouts) || !Array.isArray(data.exercises)) {
-            console.error("Validation Error: Missing workouts or exercises arrays", data);
+          let schemaVersion = 0;
+          let dataToProcess: any;
+
+          // Detect Envelope
+          if (rawData.app === "DreamLog" && typeof rawData.schemaVersion === 'number') {
+            schemaVersion = rawData.schemaVersion;
+            dataToProcess = rawData.data;
+            console.log(`Detected DreamLog backup envelope v${schemaVersion}`);
+          } else {
+            // Old format
+            dataToProcess = rawData;
+            console.log("Old backup format detected (schema v0)");
+          }
+
+          if (schemaVersion > CURRENT_SCHEMA_VERSION) {
+            console.error(`Import rejected: schema version ${schemaVersion} is newer than current ${CURRENT_SCHEMA_VERSION}`);
+            alert("This backup was created with a newer version of DreamLog. Please update the app.");
+            return reject(new Error("Newer schema version"));
+          }
+
+          // Run Migrations
+          const migratedData = migrate(dataToProcess, schemaVersion);
+
+          // Validation
+          if (!migratedData || !Array.isArray(migratedData.workouts) || !Array.isArray(migratedData.exercises)) {
+            console.error("Validation Error: Missing workouts or exercises arrays after migration", migratedData);
             alert("Invalid backup file: Missing required workout or exercise data.");
             return reject(new Error("Invalid data structure"));
           }
 
           // Safe Normalization with fallbacks
-          const normalizedWorkouts = data.workouts.map((w: any) => {
+          const normalizedWorkouts = migratedData.workouts.map((w: any) => {
             try {
               return normalizeWorkout(w);
             } catch (normErr) {
               console.error("Normalization error for workout:", w, normErr);
-              // Return a minimal safe workout object if normalization fails
               return {
                 id: w?.id || crypto.randomUUID(),
                 name: w?.name || "Recovered Workout",
@@ -525,9 +590,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           });
 
-          const safeExercises = data.exercises.filter((ex: any) => ex && typeof ex.id === 'string' && typeof ex.name === 'string');
-          const safeNotes = Array.isArray(data.globalNotes) 
-            ? data.globalNotes.filter((n: any) => n && typeof n.id === 'string' && typeof n.text === 'string')
+          const safeExercises = migratedData.exercises.filter((ex: any) => ex && typeof ex.id === 'string' && typeof ex.name === 'string');
+          const safeNotes = Array.isArray(migratedData.globalNotes) 
+            ? migratedData.globalNotes.filter((n: any) => n && typeof n.id === 'string' && typeof n.text === 'string')
             : [];
 
           // Success - Update State
