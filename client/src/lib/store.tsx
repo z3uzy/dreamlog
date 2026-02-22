@@ -63,6 +63,39 @@ const normalizeWorkout = (w: any): Workout => {
     };
 };
 
+const safeLoadWorkouts = (): Workout[] => {
+  const primaryKey = "ironlog-workouts";
+  const backupKey = "ironlog-workouts-backup";
+
+  const tryLoad = (key: string): Workout[] | null => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return null;
+      return parsed.map(normalizeWorkout);
+    } catch (err) {
+      console.error(`Error loading workouts from ${key}:`, err);
+      return null;
+    }
+  };
+
+  const primary = tryLoad(primaryKey);
+  if (primary) return primary;
+
+  const backup = tryLoad(backupKey);
+  if (backup) {
+    console.log("Restoring workouts from backup...");
+    localStorage.setItem(primaryKey, JSON.stringify(backup));
+    return backup;
+  }
+
+  console.log("Both primary and backup corrupted or empty. Resetting to mock data.");
+  localStorage.removeItem(primaryKey);
+  localStorage.removeItem(backupKey);
+  return MOCK_WORKOUTS.map(normalizeWorkout);
+};
+
 export interface Note {
   id: string;
   text: string;
@@ -225,11 +258,7 @@ const migrate = (data: any, fromVersion: number): any => {
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [workouts, setWorkouts] = useState<Workout[]>(() => {
-    const saved = localStorage.getItem("ironlog-workouts");
-    const parsed = saved ? JSON.parse(saved) : MOCK_WORKOUTS;
-    return Array.isArray(parsed) ? parsed.map(normalizeWorkout) : MOCK_WORKOUTS.map(normalizeWorkout);
-  });
+  const [workouts, setWorkouts] = useState<Workout[]>(safeLoadWorkouts);
 
   const [exercises, setExercises] = useState<Exercise[]>(() => {
     const saved = localStorage.getItem("ironlog-exercises");
@@ -271,7 +300,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    localStorage.setItem("ironlog-workouts", JSON.stringify(workouts));
+    try {
+      const data = JSON.stringify(workouts);
+      localStorage.setItem("ironlog-workouts-backup", data);
+      localStorage.setItem("ironlog-workouts", data);
+    } catch (err) {
+      console.error("Persistence error for workouts:", err);
+    }
   }, [workouts]);
 
   useEffect(() => {
