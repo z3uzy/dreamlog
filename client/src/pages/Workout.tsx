@@ -129,7 +129,6 @@ export default function WorkoutPage() {
   };
 
   const handleUpdateSet = (exerciseId: string, setId: string, field: 'reps' | 'weight' | 'completed', value: any) => {
-      if (isReadonly) return;
       const updatedExercises = workout.exercises.map(ex => {
           if (ex.id === exerciseId) {
               return {
@@ -143,7 +142,6 @@ export default function WorkoutPage() {
   };
 
   const handleAddSet = (exerciseId: string, previousSet?: WorkoutSet) => {
-      if (isReadonly) return;
       const updatedExercises = workout.exercises.map(ex => {
           if (ex.id === exerciseId) {
               const newSet: WorkoutSet = {
@@ -160,19 +158,25 @@ export default function WorkoutPage() {
   };
   
   const handleRemoveSet = (exerciseId: string, setId: string) => {
-      if (isReadonly) return;
       const updatedExercises = workout.exercises.map(ex => {
           if (ex.id === exerciseId) {
-              return { ...ex, sets: ex.sets.filter(s => s.id !== setId) };
+              let newSets = ex.sets.filter(s => s.id !== setId);
+              if (newSets.length === 0) {
+                  newSets = [{
+                      id: crypto.randomUUID(),
+                      reps: 0,
+                      weight: 0,
+                      completed: false
+                  }];
+              }
+              return { ...ex, sets: newSets };
           }
           return ex;
       });
-      // If no sets left, remove exercise? No, let user delete exercise explicitly usually, but for simplicity let's keep empty exercise
       updateWorkout({ ...workout, exercises: updatedExercises });
   };
 
     const handleDeleteExercise = (exerciseId: string) => {
-        if (isReadonly) return;
         updateWorkout({
             ...workout,
             exercises: workout.exercises.filter(e => e.id !== exerciseId)
@@ -280,15 +284,13 @@ export default function WorkoutPage() {
                     onAddSet={handleAddSet}
                     onRemoveSet={handleRemoveSet}
                     onDelete={() => handleDeleteExercise(exercise.id)}
-                    isReadonly={isReadonly}
+                    isReadonly={false}
                     unitSystem={unitSystem}
                 />
             ))}
         </div>
 
-        {!isReadonly && (
-             <AddExerciseDrawer onSelect={handleAddExercise} exercises={exercises} onNewExercise={addExercise} />
-        )}
+        <AddExerciseDrawer onSelect={handleAddExercise} exercises={exercises} onNewExercise={addExercise} />
         
         {/* Workout Notes */}
         <div className="space-y-2">
@@ -393,15 +395,22 @@ function ExerciseCard({
                                     readOnly={isReadonly}
                                 />
                             </div>
-                            <div className="col-span-3 flex justify-center">
+                            <div className="col-span-3 flex justify-center gap-1">
                                 <Button
                                     size="sm"
                                     variant={set.completed ? "default" : "secondary"}
-                                    className={cn("h-8 w-full rounded-lg transition-all", set.completed ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80")}
+                                    className={cn("h-8 flex-1 rounded-lg transition-all", set.completed ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80")}
                                     onClick={() => onUpdateSet(exercise.id, set.id, 'completed', !set.completed)}
-                                    disabled={isReadonly}
                                 >
                                     {set.completed ? <Check size={14} /> : <span className="text-[10px] font-bold">LOG</span>}
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                                    onClick={() => onRemoveSet(exercise.id, set.id)}
+                                >
+                                    <X size={14} />
                                 </Button>
                             </div>
                         </div>

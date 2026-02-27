@@ -388,7 +388,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateWorkout = (updatedWorkout: Workout) => {
-    setWorkouts(prev => prev.map(w => w.id === updatedWorkout.id ? updatedWorkout : w));
+    const oldWorkout = workouts.find(w => w.id === updatedWorkout.id);
+    let finalWorkout = updatedWorkout;
+
+    if (oldWorkout && oldWorkout.status === "finished") {
+      // Check if actually modified (excluding status/endTime which we're about to change)
+      const isModified = JSON.stringify({ ...oldWorkout, status: undefined, endTime: undefined }) !== 
+                        JSON.stringify({ ...updatedWorkout, status: undefined, endTime: undefined });
+      
+      if (isModified) {
+        finalWorkout = {
+          ...updatedWorkout,
+          status: "in_progress",
+          endTime: undefined
+        };
+      }
+    }
+
+    setWorkouts(prev => prev.map(w => w.id === finalWorkout.id ? finalWorkout : w));
   };
 
   const deleteWorkout = (id: string) => {
@@ -487,7 +504,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Data Export/Import
   const exportData = async (includePhotos: boolean) => {
       const internalData = {
-          appVersion: "1.0.3",
+          appVersion: "1.0.4",
           exportDate: new Date().toISOString(),
           workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
           exercises,
@@ -514,7 +531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const exportDataManually = async (includePhotos: boolean): Promise<string> => {
       const internalData = {
-          appVersion: "1.0.3",
+          appVersion: "1.0.4",
           exportDate: new Date().toISOString(),
           workouts: includePhotos ? workouts : workouts.map(w => ({ ...w, photoUrl: undefined })),
           exercises,
